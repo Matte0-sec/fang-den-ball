@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fang den Ball</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: sans-serif;
+      background-color: #661b1b;
+      color: white;
+      text-align: center;
+    }
+
+    #score, #highscore, #timer, #level {
+      position: absolute;
+      top: 20px;
+      font-size: 24px;
+    }
+
+    #score { left: 20px; }
+    #highscore { left: 200px; }
+    #timer { right: 20px; }
+    #level { left: 400px; }
+
+    #ball, #bonus-ball {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      position: absolute;
+      transition: top 0.3s, left 0.3s;
+      cursor: pointer;
+      display: none;
+    }
+
+    #ball {
+      background-color: black;
+    }
+
+    #bonus-ball {
+      background-color: gold;
+      box-shadow: 0 0 20px yellow;
+      width: 60px;
+      height: 60px;
+      z-index: 10;
+      animation: pulse 1.2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); box-shadow: 0 0 20px yellow; }
+      50% { transform: scale(1.1); box-shadow: 0 0 35px orange; }
+      100% { transform: scale(1); box-shadow: 0 0 20px yellow; }
+    }
+
+    .control-select {
+      position: absolute;
+      top: 20px;
+      font-size: 18px;
+      padding: 10px 16px;
+      border-radius: 12px;
+      background-color: #222;
+      color: #fff;
+      border: 1px solid #aaa;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+      appearance: none;
+      cursor: pointer;
+    }
+
+    .control-select option {
+      background-color: #222;
+      color: #fff;
+    }
+
+    #difficulty-select { left: 50%; transform: translateX(-50%); }
+    #time-select { left: 50%; top: 60px; transform: translateX(-50%); }
+
+    #start-button, #restart-button {
+      position: absolute;
+      top: 110px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 24px;
+      padding: 12px 24px;
+      background-color: #222;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+
+    #start-button:hover, #restart-button:hover {
+      background-color: #444;
+    }
+
+    #restart-button { display: none; }
+
+    #end-message {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      font-size: 48px;
+      color: yellow;
+      display: block;
+      transition: transform 0.5s ease;
+    }
+
+    #end-message.show {
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .score-flash {
+      animation: flashScore 0.4s ease-in-out;
+    }
+
+    @keyframes flashScore {
+      0% { color: white; transform: scale(1); }
+      50% { color: lime; transform: scale(1.3); }
+      100% { color: white; transform: scale(1); }
+    }
+
+    .click-circle {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      border: 2px solid white;
+      pointer-events: none;
+      opacity: 0.7;
+      animation: clickEffect 0.5s ease-out forwards;
+      z-index: 999;
+    }
+
+    @keyframes clickEffect {
+      0% { transform: scale(0.5); opacity: 0.7; }
+      100% { transform: scale(1.8); opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="score">Punkte: 0</div>
+  <div id="highscore">Highscore: 0</div>
+  <div id="timer">Zeit: 30</div>
+  <div id="level">Level: 1</div>
+
+  <select id="difficulty-select" class="control-select">
+    <option value="1500">Einfach</option>
+    <option value="1000">Mittel</option>
+    <option value="500">Schwer</option>
+  </select>
+
+  <select id="time-select" class="control-select" style="top: 60px;">
+    <option value="15">15 Sekunden</option>
+    <option value="30" selected>30 Sekunden</option>
+    <option value="45">45 Sekunden</option>
+    <option value="60">60 Sekunden</option>
+    <option value="0">Kein Zeitlimit</option>
+  </select>
+
+  <button id="start-button">Spiel starten</button>
+  <button id="restart-button">Neustarten</button>
+
+  <div id="end-message">⏰ Zeit ist um!</div>
+  <div id="ball"></div>
+  <div id="bonus-ball"></div>
+
+  <audio id="clickSound" src="https://www.soundjay.com/button/sounds/button-35.mp3" preload="auto"></audio>
+  <audio id="endSound" src="https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3" preload="auto"></audio>
+  <audio id="bonusSound" src="https://www.soundjay.com/misc/sounds/bell-ringing-01.mp3" preload="auto"></audio>
+  <audio id="bgMusic" src="https://www.bensound.com/bensound-music/bensound-epic.mp3" preload="auto" loop></audio>
+
+  <script>
+    const ball = document.getElementById("ball");
+    const bonusBall = document.getElementById("bonus-ball");
+    const scoreDisplay = document.getElementById("score");
+    const highscoreDisplay = document.getElementById("highscore");
+    const timerDisplay = document.getElementById("timer");
+    const levelDisplay = document.getElementById("level");
+    const startButton = document.getElementById("start-button");
+    const restartButton = document.getElementById("restart-button");
+    const difficultySelect = document.getElementById("difficulty-select");
+    const timeSelect = document.getElementById("time-select");
+    const endMessage = document.getElementById("end-message");
+    const clickSound = document.getElementById("clickSound");
+    const endSound = document.getElementById("endSound");
+    const bonusSound = document.getElementById("bonusSound");
+    const bgMusic = document.getElementById("bgMusic");
+
+    let score = 0;
+    let highscore = 0;
+    let level = 1;
+    let gameInterval, timerInterval;
+    let remainingTime = 30;
+    let gameRunning = false;
+
+    function moveBall() {
+      const maxX = window.innerWidth - 50;
+      const maxY = window.innerHeight - 50;
+      const x = Math.random() * maxX;
+      const y = Math.random() * maxY;
+      ball.style.left = `${x}px`;
+      ball.style.top = `${y}px`;
+    }
+
+    function moveBonusBall() {
+      const maxX = window.innerWidth - 60;
+      const maxY = window.innerHeight - 60;
+      const x = Math.random() * maxX;
+      const y = Math.random() * maxY;
+      bonusBall.style.left = `${x}px`;
+      bonusBall.style.top = `${y}px`;
+    }
+
+    function showClickEffect(x, y) {
+      const circle = document.createElement("div");
+      circle.classList.add("click-circle");
+      circle.style.left = `${x - 30}px`;
+      circle.style.top = `${y - 30}px`;
+      document.body.appendChild(circle);
+      setTimeout(() => circle.remove(), 500);
+    }
+
+    function updateScoreDisplay() {
+      scoreDisplay.textContent = `Punkte: ${score}`;
+      scoreDisplay.classList.add("score-flash");
+      setTimeout(() => scoreDisplay.classList.remove("score-flash"), 400);
+    }
+
+    function checkLevelUp() {
+      const newLevel = Math.floor(score / 10) + 1;
+      if (newLevel !== level) {
+        level = newLevel;
+        levelDisplay.textContent = `Level: ${level}`;
+        document.body.style.backgroundColor = `hsl(${(level * 40) % 360}, 60%, 30%)`;
+      }
+    }
+
+    ball.addEventListener("click", (e) => {
+      if (!gameRunning) return;
+      clickSound.currentTime = 0;
+      clickSound.play();
+      score++;
+      updateScoreDisplay();
+      checkLevelUp();
+      moveBall();
+      showClickEffect(e.clientX, e.clientY);
+    });
+
+    bonusBall.addEventListener("click", () => {
+      if (!gameRunning) return;
+      bonusSound.currentTime = 0;
+      bonusSound.play();
+      const bonusType = Math.random() < 0.5 ? 'punkte' : 'zeit';
+      if (bonusType === 'punkte') {
+        score += 5;
+      } else {
+        remainingTime += 5;
+      }
+      updateScoreDisplay();
+      checkLevelUp();
+      bonusBall.style.display = "none";
+    });
+
+    function startGame() {
+      score = 0;
+      level = 1;
+      updateScoreDisplay();
+      levelDisplay.textContent = "Level: 1";
+      remainingTime = parseInt(timeSelect.value);
+      timerDisplay.textContent = `Zeit: ${remainingTime}`;
+      ball.style.display = "block";
+      moveBall();
+      bgMusic.currentTime = 0;
+      bgMusic.play();
+      gameRunning = true;
+
+      difficultySelect.style.display = "none";
+      timeSelect.style.display = "none";
+      startButton.style.display = "none";
+      endMessage.classList.remove("show");
+      restartButton.style.display = "none";
+
+      document.body.style.backgroundColor = "#661b1b";
+
+      const intervalTime = parseInt(difficultySelect.value);
+      gameInterval = setInterval(() => {
+        moveBall();
+        if (Math.random() < 0.2) {
+          bonusBall.style.display = "block";
+          moveBonusBall();
+          setTimeout(() => bonusBall.style.display = "none", 1500);
+        }
+      }, intervalTime);
+
+      if (remainingTime > 0) {
+        timerInterval = setInterval(() => {
+          remainingTime--;
+          timerDisplay.textContent = `Zeit: ${remainingTime}`;
+          if (remainingTime <= 0) endGame();
+        }, 1000);
+      } else {
+        timerDisplay.textContent = "Unbegrenzt";
+      }
+    }
+
+    function endGame() {
+      gameRunning = false;
+      clearInterval(gameInterval);
+      clearInterval(timerInterval);
+      bgMusic.pause();
+      endSound.play();
+      endMessage.classList.add("show");
+      ball.style.display = "none";
+      bonusBall.style.display = "none";
+      restartButton.style.display = "block";
+      if (score > highscore) {
+        highscore = score;
+        highscoreDisplay.textContent = `Highscore: ${highscore}`;
+      }
+    }
+
+    startButton.addEventListener("click", startGame);
+    restartButton.addEventListener("click", () => {
+      difficultySelect.style.display = "block";
+      timeSelect.style.display = "block";
+      startButton.style.display = "block";
+      restartButton.style.display = "none";
+      endMessage.classList.remove("show");
+    });
+  </script>
+</body>
+</html>
+
+
+
